@@ -1,0 +1,265 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); background: transparent; }
+.dash { display: flex; flex-direction: column; gap: 16px; padding: 12px 0; }
+.header { display: flex; justify-content: space-between; align-items: center; }
+.title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); display: flex; align-items: center; gap: 8px; }
+.badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+.badge.live { background: #eaf3de; color: #3b6d11; display: flex; align-items: center; gap: 5px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #639922; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; cursor: pointer; transition: border-color .2s; position: relative; overflow: hidden; }
+.card:hover { border-color: var(--color-border-secondary); }
+.card.selected { border-color: #534AB7; border-width: 1.5px; }
+.card.anomaly { border-color: #E24B4A; border-width: 1.5px; }
+.card .sym { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+.card .price { font-size: 20px; font-weight: 500; color: var(--color-text-primary); }
+.card .change { font-size: 11px; margin-top: 2px; }
+.card .change.up { color: #3b6d11; }
+.card .change.down { color: #A32D2D; }
+.card .spark { width: 100%; height: 28px; margin-top: 6px; }
+.warn-pill { background: #FCEBEB; color: #A32D2D; font-size: 9px; font-weight: 500; padding: 1px 5px; border-radius: 8px; }
+.panel { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 16px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.panel-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; }
+.metric label { display: block; font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.metric .val { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+.metric .val.danger { color: #E24B4A; }
+.metric .val.safe { color: #639922; }
+.chart-wrap { position: relative; height: 200px; }
+.alert-bar { background: #FCEBEB; border: 0.5px solid #F09595; border-radius: var(--border-radius-md); padding: 8px 12px; font-size: 12px; color: #791F1F; display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.log { display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto; }
+.log-entry { font-size: 11px; display: flex; gap: 8px; align-items: baseline; color: var(--color-text-secondary); }
+.log-entry.alert { color: #A32D2D; }
+.log-entry .ts { color: var(--color-text-tertiary); font-family: var(--font-mono); min-width: 56px; }
+.log-entry .msg { color: inherit; }
+.model-info { display: flex; gap: 8px; }
+.model-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: var(--color-background-secondary); color: var(--color-text-secondary); border: 0.5px solid var(--color-border-tertiary); }
+.model-pill.active { background: #EEEDFE; color: #3C3489; border-color: #AFA9EC; }
+.section-label { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+</style>
+
+<div class="dash" aria-label="Real-time stock anomaly detection dashboard">
+
+  <div class="header">
+    <div class="title">
+      <i class="ti ti-chart-line" aria-hidden="true" style="font-size:20px"></i>
+      Stock Anomaly Detection
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="badge live"><div class="dot"></div>LIVE STREAM</div>
+      <div class="model-info">
+        <div class="model-pill active">Z-Score</div>
+        <div class="model-pill active">IsolationForest</div>
+        <div class="model-pill">LSTM (next)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title" id="panel-title">AAPL — Live Analysis</div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);font-family:var(--font-mono)" id="ts-label">--</div>
+    </div>
+    <div class="metrics" id="metrics-grid"></div>
+    <div class="section-label">Price stream + anomaly markers</div>
+    <div class="chart-wrap">
+      <canvas id="mainChart" role="img" aria-label="Live price chart with anomaly markers highlighted in red">No data yet.</canvas>
+    </div>
+    <div id="alert-zone"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Event log</div>
+      <div style="font-size:11px;color:var(--color-text-tertiary)" id="anomaly-count">0 anomalies detected</div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const SYMBOLS = ['AAPL','GOOGL','MSFT','TSLA','AMZN'];
+const COLORS = { AAPL:'#534AB7',GOOGL:'#3b6d11',MSFT:'#185FA5',TSLA:'#993556',AMZN:'#BA7517' };
+const WIN = 80;
+
+const state = {};
+SYMBOLS.forEach(s => {
+  state[s] = {
+    price: { AAPL:182, GOOGL:175, MSFT:420, TSLA:248, AMZN:196 }[s],
+    history: [], anomalies: [], totalAnomalies: 0,
+    mean: 0, std: 1, z: 0, isAnomaly: false, prevPrice: 0
+  };
+});
+
+let selected = 'AAPL';
+let totalAnomalies = 0;
+let mainChart = null;
+
+function clamp(v,mn,mx){return Math.max(mn,Math.min(mx,v));}
+function fmt(v,d=2){return Number(v).toFixed(d);}
+
+function detectAnomaly(sym) {
+  const s = state[sym];
+  const h = s.history;
+  if (h.length < 15) return;
+  const window = h.slice(-60);
+  const mean = window.reduce((a,b)=>a+b,0)/window.length;
+  const std = Math.sqrt(window.map(x=>(x-mean)**2).reduce((a,b)=>a+b,0)/window.length) || 1;
+  const z = Math.abs((s.price - mean) / std);
+  const pctChange = s.prevPrice ? Math.abs((s.price - s.prevPrice)/s.prevPrice)*100 : 0;
+  s.mean = mean; s.std = std; s.z = z;
+  s.isAnomaly = z > 2.4 || pctChange > 2.8;
+  s.confidence = clamp((z/4 + pctChange/10)/2, 0, 1);
+  if (s.isAnomaly) { s.totalAnomalies++; totalAnomalies++; }
+}
+
+function tick() {
+  SYMBOLS.forEach(sym => {
+    const s = state[sym];
+    s.prevPrice = s.price;
+    let delta = (Math.random()-0.5)*2.5;
+    if (Math.random() < 0.025) delta = (Math.random()<.5?-1:1) * (6+Math.random()*8);
+    s.price = clamp(s.price + delta, s.price*0.6, s.price*1.6);
+    s.history.push(s.price);
+    if (s.history.length > WIN*2) s.history.shift();
+    detectAnomaly(sym);
+    if (s.isAnomaly) s.anomalies.push({ idx: s.history.length-1, price: s.price });
+  });
+  render();
+}
+
+function renderCards() {
+  const el = document.getElementById('cards');
+  el.innerHTML = SYMBOLS.map(sym => {
+    const s = state[sym];
+    const pct = s.prevPrice ? ((s.price - s.prevPrice)/s.prevPrice*100) : 0;
+    const up = pct >= 0;
+    const h = s.history.slice(-20);
+    const mn = Math.min(...h)||1, mx = Math.max(...h)||2;
+    const pts = h.map((v,i) => {
+      const x = (i/(h.length-1||1))*58;
+      const y = 26 - ((v-mn)/(mx-mn||1))*22;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<div class="card${sym===selected?' selected':''}${s.isAnomaly?' anomaly':''}" onclick="selectSym('${sym}')">
+      <div class="sym">${sym}${s.isAnomaly?'<span class="warn-pill">ANOMALY</span>':''}</div>
+      <div class="price">$${fmt(s.price)}</div>
+      <div class="change ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(pct).toFixed(2)}%</div>
+      <svg class="spark" viewBox="0 0 58 28" preserveAspectRatio="none">
+        <polyline points="${pts}" fill="none" stroke="${s.isAnomaly?'#E24B4A':COLORS[sym]}" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+    </div>`;
+  }).join('');
+}
+
+function renderMetrics() {
+  const s = state[selected];
+  const pct = s.prevPrice ? ((s.price-s.prevPrice)/s.prevPrice*100) : 0;
+  document.getElementById('panel-title').textContent = `${selected} — Live Analysis`;
+  document.getElementById('ts-label').textContent = new Date().toLocaleTimeString();
+  document.getElementById('metrics-grid').innerHTML = `
+    <div class="metric"><label>Current price</label><div class="val">$${fmt(s.price)}</div></div>
+    <div class="metric"><label>Rolling mean</label><div class="val">$${fmt(s.mean)}</div></div>
+    <div class="metric"><label>Z-score</label><div class="val ${s.z>2.4?'danger':'safe'}">${fmt(s.z,2)}</div></div>
+    <div class="metric"><label>Anomaly status</label><div class="val ${s.isAnomaly?'danger':'safe'}">${s.isAnomaly?'DETECTED':'NORMAL'}</div></div>
+  `;
+  const az = document.getElementById('alert-zone');
+  az.innerHTML = s.isAnomaly ? `<div class="alert-bar">
+    <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+    Anomaly detected on ${selected} — Z-score ${fmt(s.z,2)}, confidence ${fmt((s.confidence||0)*100,0)}%. Possible price shock.
+  </div>` : '';
+}
+
+function renderChart() {
+  const s = state[selected];
+  const h = s.history.slice(-WIN);
+  const labels = h.map((_,i)=>i);
+  const anomalyPoints = h.map((v,i)=>{
+    const absIdx = s.history.length - WIN + i;
+    return s.anomalies.find(a=>a.idx===absIdx) ? v : null;
+  });
+
+  if (!mainChart) {
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    mainChart = new Chart(ctx, {
+      type:'line',
+      data: { labels, datasets:[
+        { label:'Price', data:h, borderColor: COLORS[selected], borderWidth:1.5, pointRadius:0, tension:.3, fill:false },
+        { label:'Anomaly', data:anomalyPoints, type:'scatter', pointRadius:5, pointBackgroundColor:'#E24B4A', pointBorderColor:'#E24B4A', showLine:false }
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{label:ctx=>`$${fmt(ctx.raw)}`} } },
+        scales:{
+          x:{display:false},
+          y:{
+            ticks:{callback:v=>`$${Math.round(v)}`, color:'#888', font:{size:10}},
+            grid:{color:'rgba(128,128,128,.1)'}
+          }
+        }
+      }
+    });
+  } else {
+    mainChart.data.labels = labels;
+    mainChart.data.datasets[0].data = h;
+    mainChart.data.datasets[0].borderColor = COLORS[selected];
+    mainChart.data.datasets[1].data = anomalyPoints;
+    mainChart.update('none');
+  }
+}
+
+function renderLog() {
+  const entries = [];
+  SYMBOLS.forEach(sym => {
+    const s = state[sym];
+    if (s.isAnomaly) {
+      entries.push({ sym, price: s.price, z: s.z, ts: new Date().toLocaleTimeString(), type:'alert' });
+    }
+  });
+  if (entries.length) {
+    const log = document.getElementById('log');
+    entries.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'log-entry alert';
+      div.innerHTML = `<span class="ts">${e.ts}</span><span class="msg">⚠ ${e.sym} anomaly — $${fmt(e.price)} (Z=${fmt(e.z,2)})</span>`;
+      log.prepend(div);
+      if (log.children.length > 20) log.lastChild.remove();
+    });
+  }
+  document.getElementById('anomaly-count').textContent = `${totalAnomalies} anomaly events detected`;
+}
+
+function render() {
+  renderCards();
+  renderMetrics();
+  renderChart();
+  renderLog();
+}
+
+function selectSym(sym) {
+  selected = sym;
+  if (mainChart) { mainChart.destroy(); mainChart = null; }
+  render();
+}
+
+// Seed history
+SYMBOLS.forEach(sym => {
+  for (let i=0; i<40; i++) {
+    state[sym].price += (Math.random()-.5)*3;
+    state[sym].history.push(state[sym].price);
+  }
+  detectAnomaly(sym);
+});
+
+render();
+setInterval(tick, 900);
+</script>
